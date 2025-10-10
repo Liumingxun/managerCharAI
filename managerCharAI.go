@@ -64,6 +64,18 @@ type CharacterCard struct {
 	Talkativeness  string        `json:"talkativeness"`
 }
 
+func (c *CharacterCard) ToJSON() (string, error) {
+	jsonData, err := json.Marshal(c)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+func (c *CharacterCard) Format() string {
+	return c.Spec
+}
+
 // ReadPNG reads a PNG file and extracts the Character Card base64 metadata
 func ReadPNG(file string) (string, error) {
 	data, err := os.ReadFile(file)
