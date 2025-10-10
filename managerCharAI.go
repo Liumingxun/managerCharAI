@@ -1,4 +1,4 @@
-package readerCharV3
+package managerCharAI
 
 import (
 	"bytes"
@@ -90,17 +90,27 @@ type CharacterCardV3 struct {
 	ModificationDate         *int              `json:"modification_date"`
 }
 
-// ReadPNG reads a PNG file and extracts the Character Card V3 metadata
-func ReadPNG(file string) (*CharacterCardV3, error) {
+// ReadPNG reads a PNG file and extracts the Character Card base64 metadata
+func ReadPNG(file string) (string, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// Extract base64 data from PNG
 	base64Data, err := extractBase64FromPNG(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract base64: %w", err)
+		return "", fmt.Errorf("failed to extract base64: %w", err)
+	}
+
+	return base64Data, nil
+}
+
+// ReadPNGAsV3 reads a PNG file and extracts the Character Card V3 metadata as a struct
+func ReadPNGAsV3(file string) (*CharacterCardV3, error) {
+	base64Data, err := ReadPNG(file)
+	if err != nil {
+		return nil, err
 	}
 
 	// Decode base64
@@ -125,49 +135,44 @@ func extractBase64FromPNG(data []byte) (string, error) {
 		return "", errors.New("not a valid PNG file")
 	}
 
-	// Find IEND chunk (marks the end of PNG)
-	// Look for "IEND" followed by the standard CRC: AE 42 60 82
-	iendMarker := []byte{0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82}
-	iendPos := bytes.Index(data, iendMarker)
-	if iendPos == -1 {
-		return "", errors.New("IEND chunk not found")
-	}
-	// Skip past IEND marker (8 bytes: "IEND" + CRC)
-	iendPos += len(iendMarker)
+	// Parse PNG chunks looking for text chunks with keyword "chara"
+	pos := 8 // Skip PNG signature
 
-	if iendPos >= len(data) {
-		return "", errors.New("no data after IEND chunk")
-	}
+	for pos < len(data)-8 {
+		// Read chunk length (4 bytes, big-endian)
+		if pos+4 > len(data) {
+			break
+		}
+		chunkLen := binary.BigEndian.Uint32(data[pos : pos+4])
+		pos += 4
 
-	// The data after IEND should contain the character card metadata
-	remainingData := data[iendPos:]
+		// Read chunk type (4 bytes)
+		if pos+4 > len(data) {
+			break
+		}
+		chunkType := string(data[pos : pos+4])
+		pos += 4
 
-	// Look for the "EXtchara" pattern (custom chunk format)
-	charaIdx := bytes.Index(remainingData, []byte("EXtchara\x00"))
-	if charaIdx != -1 {
-		// Extract data after the "EXtchara\0" marker
-		base64Start := charaIdx + 9 // len("EXtchara\0")
-		if base64Start < len(remainingData) {
-			base64Data := extractBase64Direct(remainingData[base64Start:])
-			if base64Data != "" {
-				return base64Data, nil
+		// Check if we have enough data for chunk data
+		if pos+int(chunkLen) > len(data) {
+			break
+		}
+
+		// Check for tEXt or zTXt chunks with keyword "chara"
+		if chunkType == "tEXt" {
+			chunkData := data[pos : pos+int(chunkLen)]
+			// tEXt format: keyword\0text
+			nullPos := bytes.IndexByte(chunkData, 0)
+			if nullPos != -1 && string(chunkData[:nullPos]) == "chara" {
+				return string(chunkData[nullPos+1:]), nil
 			}
 		}
+
+		// Move to next chunk (skip chunk data + 4 bytes CRC)
+		pos += int(chunkLen) + 4
 	}
 
-	// Try to find tEXt chunk with keyword "chara"
-	if base64Data, found := findTextChunk(remainingData, "chara"); found {
-		return base64Data, nil
-	}
-
-	// Alternative: look for base64 data directly
-	// Some implementations just append the base64 after IEND
-	base64Data := extractBase64Direct(remainingData)
-	if base64Data != "" {
-		return base64Data, nil
-	}
-
-	return "", errors.New("no character card metadata found")
+	return "", errors.New("no character card metadata found in PNG chunks")
 }
 
 // findTextChunk searches for a tEXt chunk with the specified keyword

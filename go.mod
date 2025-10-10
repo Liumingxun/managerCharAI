@@ -1,3 +1,3 @@
-module github.com/jonathanhecl/readerCharV3
+module github.com/jonathanhecl/managerCharAI
 
 go 1.24.1
