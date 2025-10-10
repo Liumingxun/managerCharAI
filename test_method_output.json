@@ -1,0 +1,49 @@
+{
+  "avatar": "",
+  "chat": "",
+  "create_date": "",
+  "creatorcomment": "",
+  "data": {
+    "alternate_greetings": null,
+    "character_version": "",
+    "creator": "MethodTester",
+    "creator_notes": "",
+    "description": "Testing the SaveJSON method",
+    "extensions": {
+      "depth_prompt": {
+        "depth": 0,
+        "prompt": "",
+        "role": ""
+      },
+      "fav": false,
+      "talkativeness": "",
+      "world": ""
+    },
+    "first_mes": "Hello! I was saved using the SaveJSON method.",
+    "group_only_greetings": null,
+    "mes_example": "",
+    "name": "Method Test Character",
+    "personality": "Methodical and organized",
+    "post_history_instructions": "",
+    "scenario": "Testing environment",
+    "system_prompt": "",
+    "tags": [
+      "test",
+      "method"
+    ]
+  },
+  "description": "Testing SaveJSON method",
+  "fav": false,
+  "first_mes": "",
+  "mes_example": "",
+  "name": "Method Test Character",
+  "personality": "",
+  "scenario": "",
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "tags": [
+    "test",
+    "method"
+  ],
+  "talkativeness": ""
+}

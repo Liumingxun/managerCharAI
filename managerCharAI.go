@@ -65,6 +65,7 @@ type CharacterCard struct {
 	Talkativeness  string        `json:"talkativeness"`
 }
 
+// ToJSON converts the CharacterCard to a JSON string
 func (c *CharacterCard) ToJSON() (string, error) {
 	jsonData, err := json.Marshal(c)
 	if err != nil {
@@ -73,8 +74,22 @@ func (c *CharacterCard) ToJSON() (string, error) {
 	return string(jsonData), nil
 }
 
+// Format returns the specification format of the character card
 func (c *CharacterCard) Format() string {
 	return c.Spec
+}
+
+// SaveJSON saves the CharacterCard to a JSON file
+// outputFile: path where to save the JSON file
+func (c *CharacterCard) SaveJSON(outputFile string) error {
+	return WriteJSON(outputFile, c)
+}
+
+// SavePNG saves the CharacterCard to a PNG file with embedded metadata
+// outputFile: path where to save the PNG file
+// imageBase64: base64-encoded PNG image to use as the base
+func (c *CharacterCard) SavePNG(outputFile, imageBase64 string) error {
+	return WritePNGFromCard(outputFile, imageBase64, c)
 }
 
 // ReadPNG reads a PNG file and extracts the Character Card base64 metadata
@@ -113,6 +128,37 @@ func ReadPNGAsCard(file string) (*CharacterCard, error) {
 	}
 
 	return &card, nil
+}
+
+// ReadJSON reads a JSON file and parses it into a CharacterCard struct
+func ReadJSON(file string) (*CharacterCard, error) {
+	jsonData, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON file: %w", err)
+	}
+
+	var card CharacterCard
+	if err := json.Unmarshal(jsonData, &card); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return &card, nil
+}
+
+// WriteJSON writes a CharacterCard struct to a JSON file
+// outputFile: path where to save the JSON file
+// card: CharacterCard struct to write
+func WriteJSON(outputFile string, card *CharacterCard) error {
+	jsonData, err := json.MarshalIndent(card, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	if err := os.WriteFile(outputFile, jsonData, 0644); err != nil {
+		return fmt.Errorf("failed to write JSON file: %w", err)
+	}
+
+	return nil
 }
 
 // extractBase64FromPNG extracts the base64-encoded character data from a PNG file
@@ -163,10 +209,10 @@ func extractBase64FromPNG(data []byte) (string, error) {
 }
 
 // WritePNG creates a PNG file with embedded character card metadata
+// outputFile: path to save the output PNG file
 // imageBase64: base64-encoded PNG image
 // metadataBase64: base64-encoded character card JSON
-// outputFile: path to save the output PNG file
-func WritePNG(imageBase64, metadataBase64, outputFile string) error {
+func WritePNG(outputFile, imageBase64, metadataBase64 string) error {
 	// Decode the image from base64
 	imageData, err := base64.StdEncoding.DecodeString(imageBase64)
 	if err != nil {
@@ -235,10 +281,10 @@ func WritePNG(imageBase64, metadataBase64, outputFile string) error {
 }
 
 // WritePNGFromCard creates a PNG file with embedded character card metadata from a CharacterCard struct
+// outputFile: path to save the output PNG file
 // imageBase64: base64-encoded PNG image
 // card: CharacterCard struct to embed
-// outputFile: path to save the output PNG file
-func WritePNGFromCard(imageBase64 string, card *CharacterCard, outputFile string) error {
+func WritePNGFromCard(outputFile, imageBase64 string, card *CharacterCard) error {
 	// Convert card to JSON
 	jsonData, err := json.Marshal(card)
 	if err != nil {
@@ -249,5 +295,5 @@ func WritePNGFromCard(imageBase64 string, card *CharacterCard, outputFile string
 	metadataBase64 := base64.StdEncoding.EncodeToString(jsonData)
 
 	// Use WritePNG to create the file
-	return WritePNG(imageBase64, metadataBase64, outputFile)
+	return WritePNG(outputFile, imageBase64, metadataBase64)
 }

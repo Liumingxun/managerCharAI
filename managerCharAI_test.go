@@ -150,7 +150,7 @@ func TestWritePNG(t *testing.T) {
 
 	// Write new PNG
 	outputFile := "test_output.png"
-	err = managerCharAI.WritePNG(imageBase64, metadataBase64, outputFile)
+	err = managerCharAI.WritePNG(outputFile, imageBase64, metadataBase64)
 	if err != nil {
 		t.Fatalf("WritePNG() failed: %v", err)
 	}
@@ -219,4 +219,238 @@ func removeTextChunks(data []byte) []byte {
 	}
 
 	return result
+}
+
+func TestReadJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		wantErr bool
+	}{
+		{
+			name:    "valid JSON file",
+			file:    "test.json",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			card, err := managerCharAI.ReadJSON(tt.file)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ReadJSON() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if card == nil {
+					t.Fatal("ReadJSON() returned nil card")
+				}
+
+				t.Logf("Character Name: %s", card.Name)
+				t.Logf("Spec: %s v%s", card.Spec, card.SpecVersion)
+				t.Logf("Description (first 100 chars): %s", card.Description[:min(100, len(card.Description))])
+
+				if card.Name == "" && card.Data.Name == "" {
+					t.Error("Both Name and Data.Name are empty")
+				}
+			}
+		})
+	}
+}
+
+func TestWriteJSON(t *testing.T) {
+	// Create a test card
+	card := &managerCharAI.CharacterCard{
+		Name:        "Test Character",
+		Description: "A test character for JSON writing",
+		Spec:        "chara_card_v3",
+		SpecVersion: "3.0",
+		Tags:        []string{"test", "json", "example"},
+		CreateDate:  "2025-10-10",
+		Fav:         false,
+		Data: managerCharAI.CharacterData{
+			Name:        "Test Character",
+			Creator:     "TestCreator",
+			Description: "Detailed test description for demonstration purposes",
+			FirstMes:    "Hello from JSON! This is a test character card.",
+			Personality: "Friendly, helpful, and enthusiastic",
+			Scenario:    "Test scenario in a development environment",
+			Tags:        []string{"test", "json", "golang"},
+			CharacterVersion: "1.0",
+			CreatorNotes: "This is a test character card created by the managerCharAI library",
+			SystemPrompt: "You are a helpful test character",
+			Extensions: managerCharAI.Extensions{
+				Talkativeness: "0.8",
+				Fav:          false,
+				World:        "Test World",
+			},
+		},
+	}
+
+	outputFile := "test_output.json"
+	err := managerCharAI.WriteJSON(outputFile, card)
+	if err != nil {
+		t.Fatalf("WriteJSON() failed: %v", err)
+	}
+	// NO eliminar el archivo para poder inspeccionarlo
+	// defer os.Remove(outputFile)
+
+	t.Logf("Successfully created %s (file saved to disk for inspection)", outputFile)
+
+	// Read back and verify
+	readCard, err := managerCharAI.ReadJSON(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read back JSON: %v", err)
+	}
+
+	if readCard.Name != card.Name {
+		t.Errorf("Name mismatch. Expected: %s, Got: %s", card.Name, readCard.Name)
+	}
+
+	if readCard.Spec != card.Spec {
+		t.Errorf("Spec mismatch. Expected: %s, Got: %s", card.Spec, readCard.Spec)
+	}
+
+	if readCard.Data.Creator != card.Data.Creator {
+		t.Errorf("Creator mismatch. Expected: %s, Got: %s", card.Data.Creator, readCard.Data.Creator)
+	}
+
+	t.Logf("Successfully verified JSON content")
+	t.Logf("File location: %s", outputFile)
+	t.Logf("Character: %s by %s", readCard.Name, readCard.Data.Creator)
+}
+
+func TestJSONToPNG(t *testing.T) {
+	// Read JSON
+	card, err := managerCharAI.ReadJSON("test.json")
+	if err != nil {
+		t.Fatalf("Failed to read JSON: %v", err)
+	}
+
+	t.Logf("Loaded character: %s", card.Name)
+
+	// Read base image
+	imageData, err := os.ReadFile("clean.png")
+	if err != nil {
+		t.Fatalf("Failed to read image: %v", err)
+	}
+	imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+
+	// Create PNG with character card
+	outputFile := "test_json_to_png.png"
+	err = managerCharAI.WritePNGFromCard(outputFile, imageBase64, card)
+	if err != nil {
+		t.Fatalf("WritePNGFromCard() failed: %v", err)
+	}
+	defer os.Remove(outputFile)
+
+	t.Logf("Successfully created PNG from JSON: %s", outputFile)
+
+	// Verify by reading back
+	readCard, err := managerCharAI.ReadPNGAsCard(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read back PNG: %v", err)
+	}
+
+	if readCard.Name != card.Name {
+		t.Errorf("Name mismatch after JSON->PNG conversion")
+	}
+
+	t.Logf("Successfully verified JSON to PNG conversion")
+}
+
+func TestCharacterCard_SaveJSON(t *testing.T) {
+	// Create a character card
+	card := &managerCharAI.CharacterCard{
+		Name:        "Method Test Character",
+		Description: "Testing SaveJSON method",
+		Spec:        "chara_card_v3",
+		SpecVersion: "3.0",
+		Tags:        []string{"test", "method"},
+		Data: managerCharAI.CharacterData{
+			Name:        "Method Test Character",
+			Creator:     "MethodTester",
+			Description: "Testing the SaveJSON method",
+			FirstMes:    "Hello! I was saved using the SaveJSON method.",
+			Personality: "Methodical and organized",
+			Scenario:    "Testing environment",
+			Tags:        []string{"test", "method"},
+		},
+	}
+
+	outputFile := "test_method_output.json"
+	err := card.SaveJSON(outputFile)
+	if err != nil {
+		t.Fatalf("SaveJSON() method failed: %v", err)
+	}
+	// Keep file for inspection
+	// defer os.Remove(outputFile)
+
+	t.Logf("Successfully saved using method: %s", outputFile)
+
+	// Verify by reading back
+	readCard, err := managerCharAI.ReadJSON(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read back: %v", err)
+	}
+
+	if readCard.Name != card.Name {
+		t.Errorf("Name mismatch. Expected: %s, Got: %s", card.Name, readCard.Name)
+	}
+
+	t.Logf("Method SaveJSON() works correctly!")
+}
+
+func TestCharacterCard_SavePNG(t *testing.T) {
+	// Create a character card
+	card := &managerCharAI.CharacterCard{
+		Name:        "PNG Method Test",
+		Description: "Testing SavePNG method",
+		Spec:        "chara_card_v3",
+		SpecVersion: "3.0",
+		Tags:        []string{"test", "png", "method"},
+		Data: managerCharAI.CharacterData{
+			Name:        "PNG Method Test",
+			Creator:     "PNGMethodTester",
+			Description: "Testing the SavePNG method",
+			FirstMes:    "Hello! I was saved using the SavePNG method.",
+			Personality: "Visual and embedded",
+			Scenario:    "PNG testing environment",
+			Tags:        []string{"test", "png", "method"},
+		},
+	}
+
+	// Read base image
+	imageData, err := os.ReadFile("clean.png")
+	if err != nil {
+		t.Fatalf("Failed to read base image: %v", err)
+	}
+	imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+
+	outputFile := "test_method_output.png"
+	err = card.SavePNG(outputFile, imageBase64)
+	if err != nil {
+		t.Fatalf("SavePNG() method failed: %v", err)
+	}
+	// Keep file for inspection
+	// defer os.Remove(outputFile)
+
+	t.Logf("Successfully saved using method: %s", outputFile)
+
+	// Verify by reading back
+	readCard, err := managerCharAI.ReadPNGAsCard(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read back: %v", err)
+	}
+
+	if readCard.Name != card.Name {
+		t.Errorf("Name mismatch. Expected: %s, Got: %s", card.Name, readCard.Name)
+	}
+
+	if readCard.Data.Creator != card.Data.Creator {
+		t.Errorf("Creator mismatch. Expected: %s, Got: %s", card.Data.Creator, readCard.Data.Creator)
+	}
+
+	t.Logf("Method SavePNG() works correctly!")
 }

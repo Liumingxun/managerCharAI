@@ -5,8 +5,11 @@ Go library to read and write Character Card AI metadata embedded in PNG files. S
 ## Features
 
 - **Read** Character Cards from PNG files with embedded metadata
-- **Write** Character Cards into PNG files as embedded metadata  
+- **Write** Character Cards into PNG files as embedded metadata
+- **Read** Character Cards from standalone JSON files
+- **Write** Character Cards to standalone JSON files  
 - **Parse** Character Card structures (V2/V3 compatible)
+- **Convert** between PNG and JSON formats
 - **Base64 encoding/decoding** support
 - **Standard PNG chunk format** (tEXt chunk with "chara" keyword)
 
@@ -17,6 +20,8 @@ go get github.com/jonathanhecl/managerCharAI
 ```
 
 ## Quick Start
+
+### Reading from PNG
 
 ```go
 package main
@@ -39,6 +44,52 @@ func main() {
     fmt.Printf("Description: %s\n", card.Description)
 }
 ```
+
+### Reading from JSON
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    
+    "github.com/jonathanhecl/managerCharAI"
+)
+
+func main() {
+    // Read a character card from JSON file
+    card, err := managerCharAI.ReadJSON("character.json")
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Character: %s\n", card.Name)
+    fmt.Printf("Creator: %s\n", card.Data.Creator)
+}
+```
+
+## Function Summary
+
+### Package Functions
+
+| Function | Description |
+|----------|-------------|
+| `ReadPNG()` | Extract base64 metadata from PNG |
+| `ReadPNGAsCard()` | Read PNG and parse to CharacterCard struct |
+| `ReadJSON()` | Read standalone JSON file to CharacterCard struct |
+| `WritePNG()` | Create PNG with embedded metadata from base64 strings |
+| `WritePNGFromCard()` | Create PNG with embedded metadata from CharacterCard struct |
+| `WriteJSON()` | Write CharacterCard struct to standalone JSON file |
+
+### CharacterCard Methods
+
+| Method | Description |
+|--------|-------------|
+| `card.ToJSON()` | Convert CharacterCard to JSON string |
+| `card.Format()` | Get the specification format (e.g., "chara_card_v3") |
+| `card.SaveJSON(file)` | Save CharacterCard to JSON file |
+| `card.SavePNG(file, imageBase64)` | Save CharacterCard to PNG with embedded metadata |
 
 ## API Reference
 
@@ -86,15 +137,37 @@ fmt.Printf("Tags: %v\n", card.Tags)
 fmt.Printf("First Message: %s\n", card.FirstMes)
 ```
 
+#### `ReadJSON(file string) (*CharacterCard, error)`
+Reads a JSON file and parses it into a CharacterCard struct.
+
+**Parameters:**
+- `file`: Path to the JSON file
+
+**Returns:**
+- `*CharacterCard`: Parsed Character Card struct
+- `error`: Error if any
+
+**Example:**
+```go
+card, err := managerCharAI.ReadJSON("character.json")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Name: %s\n", card.Name)
+fmt.Printf("Creator: %s\n", card.Data.Creator)
+fmt.Printf("Description: %s\n", card.Description)
+```
+
 ### Writing Functions
 
-#### `WritePNG(imageBase64, metadataBase64, outputFile string) error`
+#### `WritePNG(outputFile, imageBase64, metadataBase64 string) error`
 Creates a PNG file with embedded Character Card metadata.
 
 **Parameters:**
+- `outputFile`: Path where to save the output PNG file
 - `imageBase64`: Base64-encoded source PNG image
 - `metadataBase64`: Base64-encoded Character Card JSON
-- `outputFile`: Path where to save the output PNG file
 
 **Returns:**
 - `error`: Error if any
@@ -115,19 +188,19 @@ jsonData := `{"name":"My Character","spec":"chara_card_v3","spec_version":"3.0"}
 metadataBase64 := base64.StdEncoding.EncodeToString([]byte(jsonData))
 
 // Write PNG with embedded metadata
-err := managerCharAI.WritePNG(imageBase64, metadataBase64, "output.png")
+err := managerCharAI.WritePNG("output.png", imageBase64, metadataBase64)
 if err != nil {
     log.Fatal(err)
 }
 ```
 
-#### `WritePNGFromCard(imageBase64 string, card *CharacterCard, outputFile string) error`
+#### `WritePNGFromCard(outputFile, imageBase64 string, card *CharacterCard) error`
 Creates a PNG file from a CharacterCard struct.
 
 **Parameters:**
+- `outputFile`: Path where to save the output PNG file
 - `imageBase64`: Base64-encoded source PNG image
 - `card`: CharacterCard struct to embed
-- `outputFile`: Path where to save the output PNG file
 
 **Returns:**
 - `error`: Error if any
@@ -156,7 +229,122 @@ imageData, _ := os.ReadFile("avatar.png")
 imageBase64 := base64.StdEncoding.EncodeToString(imageData)
 
 // Create PNG with character card
-err := managerCharAI.WritePNGFromCard(imageBase64, card, "my_character.png")
+err := managerCharAI.WritePNGFromCard("my_character.png", imageBase64, card)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+#### `WriteJSON(outputFile string, card *CharacterCard) error`
+Writes a CharacterCard struct to a JSON file with pretty formatting.
+
+**Parameters:**
+- `outputFile`: Path where to save the JSON file
+- `card`: CharacterCard struct to write
+
+**Returns:**
+- `error`: Error if any
+
+**Example:**
+```go
+card := &managerCharAI.CharacterCard{
+    Name:        "My Character",
+    Description: "A brave warrior",
+    Spec:        "chara_card_v3",
+    SpecVersion: "3.0",
+    Tags:        []string{"fantasy", "warrior"},
+    Data: managerCharAI.CharacterData{
+        Name:        "My Character",
+        Creator:     "YourName",
+        Description: "Detailed description",
+        FirstMes:    "Hello!",
+    },
+}
+
+err := managerCharAI.WriteJSON("my_character.json", card)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+## CharacterCard Methods
+
+### `card.ToJSON() (string, error)`
+Converts the CharacterCard to a JSON string.
+
+**Example:**
+```go
+card := &managerCharAI.CharacterCard{
+    Name: "My Character",
+    Spec: "chara_card_v3",
+}
+
+jsonString, err := card.ToJSON()
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(jsonString)
+```
+
+### `card.Format() string`
+Returns the specification format of the character card.
+
+**Example:**
+```go
+card, _ := managerCharAI.ReadPNGAsCard("character.png")
+fmt.Printf("Format: %s\n", card.Format()) // Output: chara_card_v3
+```
+
+### `card.SaveJSON(outputFile string) error`
+Saves the CharacterCard directly to a JSON file.
+
+**Example:**
+```go
+card := &managerCharAI.CharacterCard{
+    Name:        "My Character",
+    Description: "A brave warrior",
+    Spec:        "chara_card_v3",
+    SpecVersion: "3.0",
+    Data: managerCharAI.CharacterData{
+        Name:    "My Character",
+        Creator: "YourName",
+    },
+}
+
+// Save directly using the method
+err := card.SaveJSON("my_character.json")
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### `card.SavePNG(outputFile, imageBase64 string) error`
+Saves the CharacterCard to a PNG file with embedded metadata.
+
+**Parameters:**
+- `outputFile`: Path where to save the PNG file
+- `imageBase64`: Base64-encoded PNG image
+
+**Example:**
+```go
+// Create or load a character card
+card := &managerCharAI.CharacterCard{
+    Name:        "My Character",
+    Description: "A brave warrior",
+    Spec:        "chara_card_v3",
+    SpecVersion: "3.0",
+    Data: managerCharAI.CharacterData{
+        Name:    "My Character",
+        Creator: "YourName",
+    },
+}
+
+// Read base image
+imageData, _ := os.ReadFile("avatar.png")
+imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+
+// Save directly using the method
+err := card.SavePNG("my_character.png", imageBase64)
 if err != nil {
     log.Fatal(err)
 }
@@ -213,7 +401,69 @@ type CharacterData struct {
 
 ## Common Use Cases
 
-### 1. Extract Character Information from PNG
+### 1. Using Methods - Quick Save
+
+```go
+func quickSaveExample() error {
+    // Create a character card
+    card := &managerCharAI.CharacterCard{
+        Name:        "Quick Character",
+        Description: "Created and saved quickly",
+        Spec:        "chara_card_v3",
+        SpecVersion: "3.0",
+        Data: managerCharAI.CharacterData{
+            Name:    "Quick Character",
+            Creator: "QuickCreator",
+        },
+    }
+    
+    // Save to JSON using method
+    if err := card.SaveJSON("quick_character.json"); err != nil {
+        return err
+    }
+    
+    // Save to PNG using method
+    imageData, _ := os.ReadFile("avatar.png")
+    imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+    
+    if err := card.SavePNG("quick_character.png", imageBase64); err != nil {
+        return err
+    }
+    return nil
+}
+
+### 2. Method vs Function - Two ways to Save
+
+```go
+func demonstrateSavingMethods() error {
+    card := &managerCharAI.CharacterCard{
+        Name:        "Demo Character",
+        Spec:        "chara_card_v3",
+        SpecVersion: "3.0",
+        Data: managerCharAI.CharacterData{
+            Name:    "Demo Character",
+            Creator: "DemoCreator",
+        },
+    }
+    
+    // Method 1: Using package functions
+    err := managerCharAI.WriteJSON("output1.json", card)
+    if err != nil {
+        return err
+    }
+    
+    // Method 2: Using struct methods (more convenient)
+    err = card.SaveJSON("output2.json")
+    if err != nil {
+        return err
+    }
+    
+    // Both produce the same result!
+    return nil
+}
+```
+
+### 3. Extract Character Information from PNG
 
 ```go
 func extractCharacterInfo(filename string) error {
@@ -233,7 +483,7 @@ func extractCharacterInfo(filename string) error {
 }
 ```
 
-### 2. Modify Character Card and Save
+### 4. Modify Character Card and Save
 
 ```go
 func modifyAndSave(inputFile, outputFile string) error {
@@ -255,7 +505,7 @@ func modifyAndSave(inputFile, outputFile string) error {
     imageBase64 := base64.StdEncoding.EncodeToString(imageData)
     
     // Save modified card
-    return managerCharAI.WritePNGFromCard(imageBase64, card, outputFile)
+    return managerCharAI.WritePNGFromCard(outputFile, imageBase64, card)
 }
 ```
 
@@ -294,11 +544,48 @@ func createCharacter(imagePath, outputPath string) error {
     imageBase64 := base64.StdEncoding.EncodeToString(imageData)
     
     // Create PNG with card
-    return managerCharAI.WritePNGFromCard(imageBase64, card, outputPath)
+    return managerCharAI.WritePNGFromCard(outputPath, imageBase64, card)
 }
 ```
 
-### 4. Batch Process Multiple Character Cards
+### 4. Convert JSON to PNG
+
+```go
+func convertJSONToPNG(jsonFile, imageFile, outputFile string) error {
+    // Read character card from JSON
+    card, err := managerCharAI.ReadJSON(jsonFile)
+    if err != nil {
+        return err
+    }
+    
+    // Read base image
+    imageData, err := os.ReadFile(imageFile)
+    if err != nil {
+        return err
+    }
+    imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+    
+    // Create PNG with embedded character card
+    return managerCharAI.WritePNGFromCard(outputFile, imageBase64, card)
+}
+```
+
+### 5. Extract JSON from PNG
+
+```go
+func extractJSONFromPNG(pngFile, outputJSONFile string) error {
+    // Read character card from PNG
+    card, err := managerCharAI.ReadPNGAsCard(pngFile)
+    if err != nil {
+        return err
+    }
+    
+    // Write to JSON file
+    return managerCharAI.WriteJSON(outputJSONFile, card)
+}
+```
+
+### 6. Batch Process Multiple Character Cards
 
 ```go
 func batchProcess(inputDir, outputDir string) error {
@@ -329,7 +616,7 @@ func batchProcess(inputDir, outputDir string) error {
         imageData, _ := os.ReadFile(inputPath)
         imageBase64 := base64.StdEncoding.EncodeToString(imageData)
         
-        if err := managerCharAI.WritePNGFromCard(imageBase64, card, outputPath); err != nil {
+        if err := managerCharAI.WritePNGFromCard(outputPath, imageBase64, card); err != nil {
             fmt.Printf("Error saving %s: %v\n", file.Name(), err)
         }
     }
@@ -340,18 +627,46 @@ func batchProcess(inputDir, outputDir string) error {
 
 ## Testing
 
-Run tests with:
+Run all tests:
 
 ```bash
 go test -v
 ```
 
-Run specific test:
+Run specific tests:
 
 ```bash
+# Test PNG reading
 go test -v -run TestReadPNG
+
+# Test PNG writing
 go test -v -run TestWritePNG
+
+# Test JSON reading
+go test -v -run TestReadJSON
+
+# Test JSON writing (creates test_output.json for inspection)
+go test -v -run TestWriteJSON
+
+# Test JSON to PNG conversion
+go test -v -run TestJSONToPNG
+
+# Test CharacterCard.SaveJSON method
+go test -v -run TestCharacterCard_SaveJSON
+
+# Test CharacterCard.SavePNG method
+go test -v -run TestCharacterCard_SavePNG
 ```
+
+### Test Output Files
+
+The tests create output files for inspection:
+- `test_output.json` - Example JSON character card (from TestWriteJSON)
+- `test_output.png` - Example PNG with embedded metadata (from TestWritePNG)
+- `test_method_output.json` - Example using SaveJSON method (from TestCharacterCard_SaveJSON)
+- `test_method_output.png` - Example using SavePNG method (from TestCharacterCard_SavePNG)
+
+These files are kept on disk so you can verify the output format and content.
 
 ## Technical Details
 
@@ -366,6 +681,41 @@ go test -v -run TestWritePNG
 - **Testing tool:** [AICharED](https://desune.moe/aichared/)  
 - **Spec V2:** [SPEC_V2.md](https://github.com/malfoyslastname/character-card-spec-v2/blob/main/spec_v2.md)  
 - **Spec V3:** [SPEC_V3.md](https://github.com/kwaroran/character-card-spec-v3/blob/main/SPEC_V3.md)
+
+## Complete Feature Matrix
+
+| Operation | Package Function | CharacterCard Method |
+|-----------|-----------------|---------------------|
+| Read PNG to struct | `ReadPNGAsCard(file)` | N/A |
+| Read JSON to struct | `ReadJSON(file)` | N/A |
+| Write struct to JSON | `WriteJSON(file, card)` | `card.SaveJSON(file)` ✨ |
+| Write struct to PNG | `WritePNGFromCard(file, img64, card)` | `card.SavePNG(file, img64)` ✨ |
+| Convert to JSON string | N/A | `card.ToJSON()` |
+| Get format | N/A | `card.Format()` |
+
+✨ = Convenient method alternative
+
+## Workflow Examples
+
+```
+┌─────────────┐
+│  JSON File  │──ReadJSON()──────────┐
+└─────────────┘                      │
+                                     ▼
+┌─────────────┐              ┌──────────────┐
+│  PNG File   │──ReadPNG()──▶│ CharacterCard│
+└─────────────┘              │    Struct    │
+                             └──────────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+            card.SaveJSON()  card.SavePNG()   card.ToJSON()
+                    │                │                │
+                    ▼                ▼                ▼
+            ┌─────────────┐  ┌─────────────┐  ┌──────────┐
+            │  JSON File  │  │  PNG File   │  │  String  │
+            └─────────────┘  └─────────────┘  └──────────┘
+```
 
 ## License
 

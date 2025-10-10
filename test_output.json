@@ -1,0 +1,51 @@
+{
+  "avatar": "",
+  "chat": "",
+  "create_date": "2025-10-10",
+  "creatorcomment": "",
+  "data": {
+    "alternate_greetings": null,
+    "character_version": "1.0",
+    "creator": "TestCreator",
+    "creator_notes": "This is a test character card created by the managerCharAI library",
+    "description": "Detailed test description for demonstration purposes",
+    "extensions": {
+      "depth_prompt": {
+        "depth": 0,
+        "prompt": "",
+        "role": ""
+      },
+      "fav": false,
+      "talkativeness": "0.8",
+      "world": "Test World"
+    },
+    "first_mes": "Hello from JSON! This is a test character card.",
+    "group_only_greetings": null,
+    "mes_example": "",
+    "name": "Test Character",
+    "personality": "Friendly, helpful, and enthusiastic",
+    "post_history_instructions": "",
+    "scenario": "Test scenario in a development environment",
+    "system_prompt": "You are a helpful test character",
+    "tags": [
+      "test",
+      "json",
+      "golang"
+    ]
+  },
+  "description": "A test character for JSON writing",
+  "fav": false,
+  "first_mes": "",
+  "mes_example": "",
+  "name": "Test Character",
+  "personality": "",
+  "scenario": "",
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "tags": [
+    "test",
+    "json",
+    "example"
+  ],
+  "talkativeness": ""
+}
