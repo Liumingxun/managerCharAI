@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"os"
 )
 
@@ -159,4 +160,94 @@ func extractBase64FromPNG(data []byte) (string, error) {
 	}
 
 	return "", errors.New("no character card metadata found in PNG chunks")
+}
+
+// WritePNG creates a PNG file with embedded character card metadata
+// imageBase64: base64-encoded PNG image
+// metadataBase64: base64-encoded character card JSON
+// outputFile: path to save the output PNG file
+func WritePNG(imageBase64, metadataBase64, outputFile string) error {
+	// Decode the image from base64
+	imageData, err := base64.StdEncoding.DecodeString(imageBase64)
+	if err != nil {
+		return fmt.Errorf("failed to decode image base64: %w", err)
+	}
+
+	// Verify it's a valid PNG
+	if len(imageData) < 8 || !bytes.Equal(imageData[:8], []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
+		return errors.New("image data is not a valid PNG file")
+	}
+
+	// Find the IEND chunk position
+	iendMarker := []byte{0x49, 0x45, 0x4E, 0x44}
+	iendPos := bytes.Index(imageData, iendMarker)
+	if iendPos == -1 {
+		return errors.New("IEND chunk not found in PNG")
+	}
+
+	// Position right before IEND chunk (subtract 4 bytes for length field)
+	insertPos := iendPos - 4
+
+	// Create the tEXt chunk with keyword "chara"
+	keyword := "chara"
+	chunkData := []byte(keyword)
+	chunkData = append(chunkData, 0) // null separator
+	chunkData = append(chunkData, []byte(metadataBase64)...)
+
+	// Calculate chunk length
+	chunkLen := uint32(len(chunkData))
+
+	// Build the complete chunk
+	var chunk bytes.Buffer
+
+	// Write chunk length (4 bytes, big-endian)
+	lenBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBytes, chunkLen)
+	chunk.Write(lenBytes)
+
+	// Write chunk type "tEXt" (4 bytes)
+	chunkType := []byte("tEXt")
+	chunk.Write(chunkType)
+
+	// Write chunk data
+	chunk.Write(chunkData)
+
+	// Calculate CRC32 of chunk type + chunk data
+	crc := crc32.NewIEEE()
+	crc.Write(chunkType)
+	crc.Write(chunkData)
+	crcBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(crcBytes, crc.Sum32())
+	chunk.Write(crcBytes)
+
+	// Construct the final PNG
+	var finalPNG bytes.Buffer
+	finalPNG.Write(imageData[:insertPos])
+	finalPNG.Write(chunk.Bytes())
+	finalPNG.Write(imageData[insertPos:])
+
+	// Write to file
+	if err := os.WriteFile(outputFile, finalPNG.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
+	}
+
+	return nil
+}
+
+// WritePNGFromCard creates a PNG file with embedded character card metadata from a CharacterCard struct
+// imageBase64: base64-encoded PNG image
+// card: CharacterCard struct to embed
+// outputFile: path to save the output PNG file
+func WritePNGFromCard(imageBase64 string, card *CharacterCard, outputFile string) error {
+	// Convert card to JSON
+	jsonData, err := json.Marshal(card)
+	if err != nil {
+		return fmt.Errorf("failed to marshal card to JSON: %w", err)
+	}
+
+	// Encode JSON to base64
+	metadataBase64 := base64.StdEncoding.EncodeToString(jsonData)
+
+	// Use WritePNG to create the file
+	return WritePNG(imageBase64, metadataBase64, outputFile)
 }

@@ -2,7 +2,9 @@ package managerCharAI_test
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/jonathanhecl/managerCharAI"
@@ -129,4 +131,92 @@ func TestReadPNGAsCard(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWritePNG(t *testing.T) {
+	// Read an existing PNG and remove existing metadata to get a clean base
+	imageData, err := os.ReadFile("clean.png")
+	if err != nil {
+		t.Fatalf("Failed to read clean.png: %v", err)
+	}
+
+	// Remove existing tEXt chunks to get clean PNG
+	cleanImageData := removeTextChunks(imageData)
+	imageBase64 := base64.StdEncoding.EncodeToString(cleanImageData)
+
+	// Create simple test metadata
+	testMetadata := `{"name":"Test Character","spec":"chara_card_v3","spec_version":"3.0","description":"Test description","tags":["test1","test2","test3"]}`
+	metadataBase64 := base64.StdEncoding.EncodeToString([]byte(testMetadata))
+
+	// Write new PNG
+	outputFile := "test_output.png"
+	err = managerCharAI.WritePNG(imageBase64, metadataBase64, outputFile)
+	if err != nil {
+		t.Fatalf("WritePNG() failed: %v", err)
+	}
+	// No eliminar el archivo para que puedas verlo en disco
+	// defer os.Remove(outputFile)
+
+	t.Logf("Successfully created %s (file saved to disk)", outputFile)
+
+	// Read back and verify
+	readBase64, err := managerCharAI.ReadPNG(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read back the created PNG: %v", err)
+	}
+
+	if readBase64 != metadataBase64 {
+		t.Errorf("Metadata mismatch.\nExpected: %s\nGot: %s", metadataBase64, readBase64)
+		// Decode both to see the difference
+		expectedJSON, _ := base64.StdEncoding.DecodeString(metadataBase64)
+		gotJSON, _ := base64.StdEncoding.DecodeString(readBase64)
+		t.Logf("Expected JSON: %s", string(expectedJSON))
+		t.Logf("Got JSON: %s", string(gotJSON))
+	} else {
+		t.Logf("Metadata verification successful!")
+	}
+
+	// Decode and verify JSON
+	decodedJSON, err := base64.StdEncoding.DecodeString(readBase64)
+	if err != nil {
+		t.Fatalf("Failed to decode base64 from created PNG: %v", err)
+	}
+
+	t.Logf("Verified metadata content: %s", string(decodedJSON))
+}
+
+// removeTextChunks removes all tEXt chunks from a PNG to get a clean base image
+func removeTextChunks(data []byte) []byte {
+	if len(data) < 8 {
+		return data
+	}
+
+	var result []byte
+	result = append(result, data[:8]...) // Keep PNG signature
+
+	pos := 8
+	for pos < len(data)-8 {
+		if pos+4 > len(data) {
+			break
+		}
+
+		chunkLen := binary.BigEndian.Uint32(data[pos : pos+4])
+		if pos+8+int(chunkLen) > len(data) {
+			break
+		}
+
+		chunkType := string(data[pos+4 : pos+8])
+
+		// Copy all chunks except tEXt
+		if chunkType != "tEXt" {
+			chunkSize := 4 + 4 + int(chunkLen) + 4 // length + type + data + CRC
+			if pos+chunkSize <= len(data) {
+				result = append(result, data[pos:pos+chunkSize]...)
+			}
+		}
+
+		pos += 4 + 4 + int(chunkLen) + 4
+	}
+
+	return result
 }
