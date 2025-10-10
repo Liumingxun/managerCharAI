@@ -1,6 +1,8 @@
 package managerCharAI_test
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"testing"
 
 	"github.com/jonathanhecl/managerCharAI"
@@ -40,7 +42,32 @@ func TestReadPNG(t *testing.T) {
 			}
 
 			t.Logf("Successfully extracted base64 data, length: %d bytes", len(base64Data))
-			t.Logf("First 50 chars: %s", base64Data[:min(50, len(base64Data))])
+			t.Logf("First 100 chars of base64: %s", base64Data[:min(100, len(base64Data))])
+			
+			// Decode base64 to JSON
+			jsonData, err := base64.StdEncoding.DecodeString(base64Data)
+			if err != nil {
+				t.Errorf("Failed to decode base64: %v", err)
+				return
+			}
+			
+			t.Logf("Decoded JSON length: %d bytes", len(jsonData))
+			
+			// Pretty print JSON
+			var jsonObj interface{}
+			if err := json.Unmarshal(jsonData, &jsonObj); err != nil {
+				t.Errorf("Failed to parse JSON: %v", err)
+				t.Logf("Raw JSON (first 500 chars): %s", string(jsonData[:min(500, len(jsonData))]))
+				return
+			}
+			
+			prettyJSON, err := json.MarshalIndent(jsonObj, "", "  ")
+			if err != nil {
+				t.Errorf("Failed to pretty print JSON: %v", err)
+				return
+			}
+			
+			t.Logf("Parsed JSON (first 1000 chars):\n%s", string(prettyJSON[:min(1000, len(prettyJSON))]))
 		})
 	}
 }
