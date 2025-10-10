@@ -1,5 +1,15 @@
 package readerCharV3
 
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+)
+
 type Lorebook struct {
 	Name              string                 `json:"name"`
 	Description       string                 `json:"description"`
@@ -24,6 +34,30 @@ type Lorebook struct {
 		SecondaryKeys  *[]string              `json:"secondary_keys"`
 		Position       *string                `json:"position"`
 	} `json:"entries"`
+}
+
+type CharacterCardV2 struct {
+	Name                    string                 `json:"name"`
+	Description             string                 `json:"description"`
+	Tags                    []string               `json:"tags"`
+	Creator                 string                 `json:"creator"`
+	CharacterVersion        string                 `json:"character_version"`
+	MesExample              string                 `json:"mes_example"`
+	Extensions              map[string]interface{} `json:"extensions"`
+	SystemPrompt            string                 `json:"system_prompt"`
+	PostHistoryInstructions string                 `json:"post_history_instructions"`
+	FirstMes                string                 `json:"first_mes"`
+	AlternateGreetings      []string               `json:"alternate_greetings"`
+	Personality             string                 `json:"personality"`
+	Scenario                string                 `json:"scenario"`
+	CreatorNotes            string                 `json:"creator_notes"`
+	CharacterBook           *Lorebook              `json:"character_book"`
+	Assets                  []struct {
+		Type string `json:"type"`
+		Uri  string `json:"uri"`
+		Name string `json:"name"`
+		Ext  string `json:"ext"`
+	} `json:"assets"`
 }
 
 type CharacterCardV3 struct {
@@ -56,6 +90,171 @@ type CharacterCardV3 struct {
 	ModificationDate         *int              `json:"modification_date"`
 }
 
-func ReadPNG(file string) (string, error) {
-	return "", nil
+// ReadPNG reads a PNG file and extracts the Character Card V3 metadata
+func ReadPNG(file string) (*CharacterCardV3, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Extract base64 data from PNG
+	base64Data, err := extractBase64FromPNG(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract base64: %w", err)
+	}
+
+	// Decode base64
+	jsonData, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	// Parse JSON
+	var card CharacterCardV3
+	if err := json.Unmarshal(jsonData, &card); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return &card, nil
+}
+
+// extractBase64FromPNG extracts the base64-encoded character data from a PNG file
+func extractBase64FromPNG(data []byte) (string, error) {
+	// Verify PNG signature
+	if len(data) < 8 || !bytes.Equal(data[:8], []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
+		return "", errors.New("not a valid PNG file")
+	}
+
+	// Find IEND chunk (marks the end of PNG)
+	// Look for "IEND" followed by the standard CRC: AE 42 60 82
+	iendMarker := []byte{0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82}
+	iendPos := bytes.Index(data, iendMarker)
+	if iendPos == -1 {
+		return "", errors.New("IEND chunk not found")
+	}
+	// Skip past IEND marker (8 bytes: "IEND" + CRC)
+	iendPos += len(iendMarker)
+
+	if iendPos >= len(data) {
+		return "", errors.New("no data after IEND chunk")
+	}
+
+	// The data after IEND should contain the character card metadata
+	remainingData := data[iendPos:]
+
+	// Look for the "EXtchara" pattern (custom chunk format)
+	charaIdx := bytes.Index(remainingData, []byte("EXtchara\x00"))
+	if charaIdx != -1 {
+		// Extract data after the "EXtchara\0" marker
+		base64Start := charaIdx + 9 // len("EXtchara\0")
+		if base64Start < len(remainingData) {
+			base64Data := extractBase64Direct(remainingData[base64Start:])
+			if base64Data != "" {
+				return base64Data, nil
+			}
+		}
+	}
+
+	// Try to find tEXt chunk with keyword "chara"
+	if base64Data, found := findTextChunk(remainingData, "chara"); found {
+		return base64Data, nil
+	}
+
+	// Alternative: look for base64 data directly
+	// Some implementations just append the base64 after IEND
+	base64Data := extractBase64Direct(remainingData)
+	if base64Data != "" {
+		return base64Data, nil
+	}
+
+	return "", errors.New("no character card metadata found")
+}
+
+// findTextChunk searches for a tEXt chunk with the specified keyword
+func findTextChunk(data []byte, keyword string) (string, bool) {
+	pos := 0
+	for pos < len(data)-8 {
+		// Check if we have enough data for chunk length
+		if pos+4 > len(data) {
+			break
+		}
+
+		// Read chunk length (big-endian)
+		chunkLen := binary.BigEndian.Uint32(data[pos : pos+4])
+		pos += 4
+
+		// Check if we have enough data for chunk type
+		if pos+4 > len(data) {
+			break
+		}
+
+		// Read chunk type
+		chunkType := string(data[pos : pos+4])
+		pos += 4
+
+		// Check if we have enough data for chunk data
+		if pos+int(chunkLen) > len(data) {
+			break
+		}
+
+		if chunkType == "tEXt" {
+			chunkData := data[pos : pos+int(chunkLen)]
+			// tEXt format: keyword\0text
+			nullPos := bytes.IndexByte(chunkData, 0)
+			if nullPos != -1 {
+				kw := string(chunkData[:nullPos])
+				if kw == keyword {
+					return string(chunkData[nullPos+1:]), true
+				}
+			}
+		}
+
+		// Move to next chunk (skip chunk data + 4 bytes CRC)
+		pos += int(chunkLen) + 4
+	}
+
+	return "", false
+}
+
+// extractBase64Direct extracts base64 data when it's appended directly after IEND
+func extractBase64Direct(data []byte) string {
+	// Look for the fixed part of the footer/trailer that marks the end of the base64 data
+	// Footer pattern: [4 variable bytes] 00 00 00 00 49 45 4E 44 AE 42 60 82
+	// The fixed part is: 00 00 00 00 49 45 4E 44 AE 42 60 82
+	fixedFooter := []byte{0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82}
+	footerIdx := bytes.Index(data, fixedFooter)
+
+	// If footer found, trim the data to exclude it and the 4 variable bytes before it
+	if footerIdx != -1 {
+		// Go back 4 bytes to include the variable prefix
+		if footerIdx >= 4 {
+			data = data[:footerIdx-4]
+		} else {
+			data = data[:footerIdx]
+		}
+	}
+
+	// Remove any leading/trailing whitespace and null bytes
+	data = bytes.TrimSpace(data)
+	data = bytes.Trim(data, "\x00")
+
+	// Look for the start of base64 data
+	// Character Card V3 base64 typically starts with 'eyJ' (which is '{' in JSON)
+	startIdx := bytes.Index(data, []byte("eyJ"))
+	if startIdx == -1 {
+		return ""
+	}
+
+	// Extract from that point to the end, removing non-base64 characters
+	base64Data := data[startIdx:]
+
+	// Clean up: keep only valid base64 characters
+	var cleaned bytes.Buffer
+	for _, b := range base64Data {
+		if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '+' || b == '/' || b == '=' {
+			cleaned.WriteByte(b)
+		}
+	}
+
+	return cleaned.String()
 }
