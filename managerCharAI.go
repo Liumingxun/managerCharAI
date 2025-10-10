@@ -2,90 +2,66 @@ package managerCharAI
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 )
 
-type Lorebook struct {
-	Name              string                 `json:"name"`
-	Description       string                 `json:"description"`
-	ScanDepth         int                    `json:"scan_depth"`
-	TokenBudget       int                    `json:"token_budget"`
-	RecursiveScanning bool                   `json:"recursive_scanning"`
-	Extensions        map[string]interface{} `json:"extensions"`
-	Entries           []struct {
-		Keys           []string               `json:"keys"`
-		Content        string                 `json:"content"`
-		Extensions     map[string]interface{} `json:"extensions"`
-		Enabled        bool                   `json:"enabled"`
-		InsertionOrder int                    `json:"insertion_order"`
-		CaseSensitive  *bool                  `json:"case_sensitive"`
-		UseRegex       bool                   `json:"use_regex"`
-		Constant       *bool                  `json:"constant"`
-		Name           *string                `json:"name"`
-		Priority       *int                   `json:"priority"`
-		Id             *string                `json:"id"`
-		Comment        *string                `json:"comment"`
-		Selective      *bool                  `json:"selective"`
-		SecondaryKeys  *[]string              `json:"secondary_keys"`
-		Position       *string                `json:"position"`
-	} `json:"entries"`
+// DepthPrompt contains depth prompt configuration
+type DepthPrompt struct {
+	Depth  int    `json:"depth"`
+	Prompt string `json:"prompt"`
+	Role   string `json:"role"`
 }
 
-type CharacterCardV2 struct {
-	Name                    string                 `json:"name"`
-	Description             string                 `json:"description"`
-	Tags                    []string               `json:"tags"`
-	Creator                 string                 `json:"creator"`
-	CharacterVersion        string                 `json:"character_version"`
-	MesExample              string                 `json:"mes_example"`
-	Extensions              map[string]interface{} `json:"extensions"`
-	SystemPrompt            string                 `json:"system_prompt"`
-	PostHistoryInstructions string                 `json:"post_history_instructions"`
-	FirstMes                string                 `json:"first_mes"`
-	AlternateGreetings      []string               `json:"alternate_greetings"`
-	Personality             string                 `json:"personality"`
-	Scenario                string                 `json:"scenario"`
-	CreatorNotes            string                 `json:"creator_notes"`
-	CharacterBook           *Lorebook              `json:"character_book"`
-	Assets                  []struct {
-		Type string `json:"type"`
-		Uri  string `json:"uri"`
-		Name string `json:"name"`
-		Ext  string `json:"ext"`
-	} `json:"assets"`
+// Extensions contains additional metadata and settings
+type Extensions struct {
+	DepthPrompt   DepthPrompt `json:"depth_prompt"`
+	Fav           bool        `json:"fav"`
+	Talkativeness string      `json:"talkativeness"`
+	World         string      `json:"world"`
 }
 
-type CharacterCardV3 struct {
-	Name                    string                 `json:"name"`
-	Description             string                 `json:"description"`
-	Tags                    []string               `json:"tags"`
-	Creator                 string                 `json:"creator"`
-	CharacterVersion        string                 `json:"character_version"`
-	MesExample              string                 `json:"mes_example"`
-	Extensions              map[string]interface{} `json:"extensions"`
-	SystemPrompt            string                 `json:"system_prompt"`
-	PostHistoryInstructions string                 `json:"post_history_instructions"`
-	FirstMes                string                 `json:"first_mes"`
-	AlternateGreetings      []string               `json:"alternate_greetings"`
-	Personality             string                 `json:"personality"`
-	Scenario                string                 `json:"scenario"`
-	CreatorNotes            string                 `json:"creator_notes"`
-	CharacterBook           *Lorebook              `json:"character_book"`
-	Assets                  []struct {
-		Type string `json:"type"`
-		Uri  string `json:"uri"`
-		Name string `json:"name"`
-		Ext  string `json:"ext"`
-	} `json:"assets"`
-	Nickname                 string            `json:"nickname"`
-	CreatorNotesMultilingual map[string]string `json:"creator_notes_multilingual"`
-	Source                   []string          `json:"source"`
-	GroupOnlyGreetings       []string          `json:"group_only_greetings"`
-	CreationDate             *int              `json:"creation_date"`
-	ModificationDate         *int              `json:"modification_date"`
+// CharacterData contains the core character information
+type CharacterData struct {
+	AlternateGreetings      []string   `json:"alternate_greetings"`
+	CharacterVersion        string     `json:"character_version"`
+	Creator                 string     `json:"creator"`
+	CreatorNotes            string     `json:"creator_notes"`
+	Description             string     `json:"description"`
+	Extensions              Extensions `json:"extensions"`
+	FirstMes                string     `json:"first_mes"`
+	GroupOnlyGreetings      []string   `json:"group_only_greetings"`
+	MesExample              string     `json:"mes_example"`
+	Name                    string     `json:"name"`
+	Personality             string     `json:"personality"`
+	PostHistoryInstructions string     `json:"post_history_instructions"`
+	Scenario                string     `json:"scenario"`
+	SystemPrompt            string     `json:"system_prompt"`
+	Tags                    []string   `json:"tags"`
+}
+
+// CharacterCard represents the complete character card structure
+type CharacterCard struct {
+	Avatar         string        `json:"avatar"`
+	Chat           string        `json:"chat"`
+	CreateDate     string        `json:"create_date"`
+	CreatorComment string        `json:"creatorcomment"`
+	Data           CharacterData `json:"data"`
+	Description    string        `json:"description"`
+	Fav            bool          `json:"fav"`
+	FirstMes       string        `json:"first_mes"`
+	MesExample     string        `json:"mes_example"`
+	Name           string        `json:"name"`
+	Personality    string        `json:"personality"`
+	Scenario       string        `json:"scenario"`
+	Spec           string        `json:"spec"`
+	SpecVersion    string        `json:"spec_version"`
+	Tags           []string      `json:"tags"`
+	Talkativeness  string        `json:"talkativeness"`
 }
 
 // ReadPNG reads a PNG file and extracts the Character Card base64 metadata
@@ -102,6 +78,28 @@ func ReadPNG(file string) (string, error) {
 	}
 
 	return base64Data, nil
+}
+
+// ReadPNGAsCard reads a PNG file and extracts the Character Card as a struct
+func ReadPNGAsCard(file string) (*CharacterCard, error) {
+	base64Data, err := ReadPNG(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode base64
+	jsonData, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	// Parse JSON
+	var card CharacterCard
+	if err := json.Unmarshal(jsonData, &card); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return &card, nil
 }
 
 // extractBase64FromPNG extracts the base64-encoded character data from a PNG file
