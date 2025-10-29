@@ -69,6 +69,44 @@ func main() {
 }
 ```
 
+### Reading from JSON String
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    
+    "github.com/jonathanhecl/managerCharAI"
+)
+
+func main() {
+    // JSON string containing character card data
+    jsonString := `{
+        "name": "Test Character",
+        "spec": "chara_card_v3",
+        "spec_version": "3.0",
+        "description": "A test character",
+        "data": {
+            "name": "Test Character",
+            "creator": "TestCreator",
+            "description": "Test description",
+            "first_mes": "Hello from string!"
+        }
+    }`
+    
+    // Read a character card from JSON string
+    card, err := managerCharAI.ReadString(jsonString)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Character: %s\n", card.Name)
+    fmt.Printf("Creator: %s\n", card.Data.Creator)
+}
+```
+
 ## Function Summary
 
 ### Package Functions
@@ -78,6 +116,7 @@ func main() {
 | `ReadPNG()` | Extract base64 metadata from PNG |
 | `ReadPNGAsCard()` | Read PNG and parse to CharacterCard struct |
 | `ReadJSON()` | Read standalone JSON file to CharacterCard struct |
+| `ReadString()` | Parse JSON string to CharacterCard struct |
 | `WritePNG()` | Create PNG with embedded metadata from base64 strings |
 | `WritePNGFromCard()` | Create PNG with embedded metadata from CharacterCard struct |
 | `WriteJSON()` | Write CharacterCard struct to standalone JSON file |
@@ -150,6 +189,29 @@ Reads a JSON file and parses it into a CharacterCard struct.
 **Example:**
 ```go
 card, err := managerCharAI.ReadJSON("character.json")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Name: %s\n", card.Name)
+fmt.Printf("Creator: %s\n", card.Data.Creator)
+fmt.Printf("Description: %s\n", card.Description)
+```
+
+#### `ReadString(jsonStr string) (*CharacterCard, error)`
+Parses a JSON string and converts it into a CharacterCard struct.
+
+**Parameters:**
+- `jsonStr`: JSON string containing Character Card data
+
+**Returns:**
+- `*CharacterCard`: Parsed Character Card struct
+- `error`: Error if any
+
+**Example:**
+```go
+jsonString := `{"name":"Test Character","spec":"chara_card_v3","data":{"name":"Test Character","creator":"TestCreator"}}`
+card, err := managerCharAI.ReadString(jsonString)
 if err != nil {
     log.Fatal(err)
 }
@@ -688,6 +750,7 @@ These files are kept on disk so you can verify the output format and content.
 |-----------|-----------------|---------------------|
 | Read PNG to struct | `ReadPNGAsCard(file)` | N/A |
 | Read JSON to struct | `ReadJSON(file)` | N/A |
+| Read JSON string to struct | `ReadString(jsonStr)` | N/A |
 | Write struct to JSON | `WriteJSON(file, card)` | `card.SaveJSON(file)` ✨ |
 | Write struct to PNG | `WritePNGFromCard(file, img64, card)` | `card.SavePNG(file, img64)` ✨ |
 | Convert to JSON string | N/A | `card.ToJSON()` |
@@ -699,9 +762,13 @@ These files are kept on disk so you can verify the output format and content.
 
 ```
 ┌─────────────┐
-│  JSON File  │──ReadJSON()──────────┐
-└─────────────┘                      │
-                                     ▼
+│  String     │──ReadString()──────────┐
+└─────────────┘                        │
+                                       │ 
+┌─────────────┐                        │    
+│  JSON File  │──ReadJSON()──────────┐ │
+└─────────────┘                      │ │
+                                     ▼ ▼
 ┌─────────────┐              ┌──────────────┐
 │  PNG File   │──ReadPNG()──▶│ CharacterCard│
 └─────────────┘              │    Struct    │

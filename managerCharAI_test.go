@@ -221,6 +221,59 @@ func removeTextChunks(data []byte) []byte {
 	return result
 }
 
+func TestReadString(t *testing.T) {
+	// Test JSON string
+	testJSON := `{
+		"name": "String Test Character",
+		"spec": "chara_card_v3",
+		"spec_version": "3.0",
+		"description": "A test character from JSON string",
+		"tags": ["test", "string", "parsing"],
+		"data": {
+			"name": "String Test Character",
+			"creator": "StringTester",
+			"description": "Testing character parsing from JSON string",
+			"first_mes": "Hello! I was parsed from a JSON string.",
+			"personality": "String-based and efficient",
+			"scenario": "String parsing test environment",
+			"tags": ["test", "string", "golang"],
+			"character_version": "1.0",
+			"creator_notes": "This character was created by parsing a JSON string",
+			"system_prompt": "You are a helpful test character from string"
+		}
+	}`
+
+	card, err := managerCharAI.ReadString(testJSON)
+	if err != nil {
+		t.Fatalf("ReadString() failed: %v", err)
+	}
+
+	if card == nil {
+		t.Fatal("ReadString() returned nil card")
+	}
+
+	// Validate parsed data
+	if card.Name != "String Test Character" {
+		t.Errorf("Name mismatch. Expected: String Test Character, Got: %s", card.Name)
+	}
+
+	if card.Spec != "chara_card_v3" {
+		t.Errorf("Spec mismatch. Expected: chara_card_v3, Got: %s", card.Spec)
+	}
+
+	if card.Data.Creator != "StringTester" {
+		t.Errorf("Creator mismatch. Expected: StringTester, Got: %s", card.Data.Creator)
+	}
+
+	if len(card.Tags) != 3 {
+		t.Errorf("Tags count mismatch. Expected: 3, Got: %d", len(card.Tags))
+	}
+
+	t.Logf("Successfully parsed character from string: %s", card.Name)
+	t.Logf("Creator: %s", card.Data.Creator)
+	t.Logf("Tags: %v", card.Tags)
+}
+
 func TestReadJSON(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -270,20 +323,20 @@ func TestWriteJSON(t *testing.T) {
 		CreateDate:  "2025-10-10",
 		Fav:         false,
 		Data: managerCharAI.CharacterData{
-			Name:        "Test Character",
-			Creator:     "TestCreator",
-			Description: "Detailed test description for demonstration purposes",
-			FirstMes:    "Hello from JSON! This is a test character card.",
-			Personality: "Friendly, helpful, and enthusiastic",
-			Scenario:    "Test scenario in a development environment",
-			Tags:        []string{"test", "json", "golang"},
+			Name:             "Test Character",
+			Creator:          "TestCreator",
+			Description:      "Detailed test description for demonstration purposes",
+			FirstMes:         "Hello from JSON! This is a test character card.",
+			Personality:      "Friendly, helpful, and enthusiastic",
+			Scenario:         "Test scenario in a development environment",
+			Tags:             []string{"test", "json", "golang"},
 			CharacterVersion: "1.0",
-			CreatorNotes: "This is a test character card created by the managerCharAI library",
-			SystemPrompt: "You are a helpful test character",
+			CreatorNotes:     "This is a test character card created by the managerCharAI library",
+			SystemPrompt:     "You are a helpful test character",
 			Extensions: managerCharAI.Extensions{
 				Talkativeness: "0.8",
-				Fav:          false,
-				World:        "Test World",
+				Fav:           false,
+				World:         "Test World",
 			},
 		},
 	}

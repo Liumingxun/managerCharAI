@@ -145,6 +145,16 @@ func ReadJSON(file string) (*CharacterCard, error) {
 	return &card, nil
 }
 
+// ReadString reads a JSON string and parses it into a CharacterCard struct
+func ReadString(jsonStr string) (*CharacterCard, error) {
+	var card CharacterCard
+	if err := json.Unmarshal([]byte(jsonStr), &card); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON string: %w", err)
+	}
+
+	return &card, nil
+}
+
 // WriteJSON writes a CharacterCard struct to a JSON file
 // outputFile: path where to save the JSON file
 // card: CharacterCard struct to write
