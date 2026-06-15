@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"os"
 )
 
@@ -92,42 +93,41 @@ func (c *CharacterCard) SavePNG(outputFile, imageBase64 string) error {
 	return WritePNGFromCard(outputFile, imageBase64, c)
 }
 
+// ReadPNGFromReader reads a CharacterCard from a bytes.Reader containing PNG data
+func ReadPNGFromReader(r io.Reader) (*CharacterCard, error) {
+	base64, err := extractBase64FromReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract base64: %w", err)
+	}
+
+	var card CharacterCard
+	if err := json.Unmarshal(base64, &card); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+	return &card, nil
+}
+
 // ReadPNG reads a PNG file and extracts the Character Card base64 metadata
 func ReadPNG(file string) (string, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}
-
-	// Extract base64 data from PNG
-	base64Data, err := extractBase64FromPNG(data)
+	base64Data, err := extractBase64FromReader(bytes.NewReader(data))
 	if err != nil {
 		return "", fmt.Errorf("failed to extract base64: %w", err)
 	}
 
-	return base64Data, nil
+	return base64.StdEncoding.EncodeToString(base64Data), nil
 }
 
 // ReadPNGAsCard reads a PNG file and extracts the Character Card as a struct
 func ReadPNGAsCard(file string) (*CharacterCard, error) {
-	base64Data, err := ReadPNG(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
-
-	// Decode base64
-	jsonData, err := base64.StdEncoding.DecodeString(base64Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode base64: %w", err)
-	}
-
-	// Parse JSON
-	var card CharacterCard
-	if err := json.Unmarshal(jsonData, &card); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	return &card, nil
+	return ReadPNGFromReader(bytes.NewReader(data))
 }
 
 // ReadJSON reads a JSON file and parses it into a CharacterCard struct
@@ -171,51 +171,69 @@ func WriteJSON(outputFile string, card *CharacterCard) error {
 	return nil
 }
 
-// extractBase64FromPNG extracts the base64-encoded character data from a PNG file
-func extractBase64FromPNG(data []byte) (string, error) {
+// pngChunkHeader represents a PNG chunk's length and type fields (4 bytes each)
+type pngChunkHeader struct {
+	Length uint32
+	Type   [4]byte
+}
+
+// extractBase64FromReader reads and decodes the base64-encoded character data from a PNG stream
+func extractBase64FromReader(imgReader io.Reader) ([]byte, error) {
 	// Verify PNG signature
-	if len(data) < 8 || !bytes.Equal(data[:8], []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
-		return "", errors.New("not a valid PNG file")
+	signature := make([]byte, 8)
+
+	if _, err := io.ReadFull(imgReader, signature); err != nil ||
+		!bytes.Equal(signature, []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
+		return nil, errors.New("not a valid PNG file")
 	}
 
-	// Parse PNG chunks looking for text chunks with keyword "chara"
-	pos := 8 // Skip PNG signature
-
-	for pos < len(data)-8 {
-		// Read chunk length (4 bytes, big-endian)
-		if pos+4 > len(data) {
-			break
-		}
-		chunkLen := binary.BigEndian.Uint32(data[pos : pos+4])
-		pos += 4
-
-		// Read chunk type (4 bytes)
-		if pos+4 > len(data) {
-			break
-		}
-		chunkType := string(data[pos : pos+4])
-		pos += 4
-
-		// Check if we have enough data for chunk data
-		if pos+int(chunkLen) > len(data) {
-			break
+	var chunk pngChunkHeader
+	var rawData []byte
+	var found bool
+	for {
+		err := binary.Read(imgReader, binary.BigEndian, &chunk)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
 		}
 
-		// Check for tEXt or zTXt chunks with keyword "chara"
-		if chunkType == "tEXt" {
-			chunkData := data[pos : pos+int(chunkLen)]
-			// tEXt format: keyword\0text
-			nullPos := bytes.IndexByte(chunkData, 0)
-			if nullPos != -1 && string(chunkData[:nullPos]) == "chara" {
-				return string(chunkData[nullPos+1:]), nil
+		if string(chunk.Type[:]) == "tEXt" {
+			rawData = make([]byte, chunk.Length)
+			if _, err := imgReader.Read(rawData); err != nil {
+				return nil, err
+			}
+
+			if string(rawData[:6]) == "chara\x00" {
+				found = true
+				break
+			}
+
+			// tEXt but not chara: skip only CRC (4 bytes)
+			_, err = io.CopyN(io.Discard, imgReader, 4)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// Non-tEXt: skip data + CRC
+			_, err = io.CopyN(io.Discard, imgReader, int64(chunk.Length)+4)
+			if err != nil {
+				return nil, err
 			}
 		}
-
-		// Move to next chunk (skip chunk data + 4 bytes CRC)
-		pos += int(chunkLen) + 4
 	}
 
-	return "", errors.New("no character card metadata found in PNG chunks")
+	if !found {
+		return nil, errors.New("no character card metadata found in PNG chunks")
+	}
+
+	decoded := make([]byte, base64.RawStdEncoding.DecodedLen(len(rawData[6:])))
+	n, err := base64.StdEncoding.Decode(decoded, rawData[6:])
+	if err != nil {
+		return nil, err
+	}
+	return decoded[:n], nil
 }
 
 // WritePNG creates a PNG file with embedded character card metadata

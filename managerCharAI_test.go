@@ -74,11 +74,62 @@ func TestReadPNG(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+// TestReadPNGFromReader verifies reading a CharacterCard from a bytes.Reader
+func TestReadPNGFromReader(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		wantErr bool
+	}{
+		{
+			name:    "valid character card reader",
+			file:    "test.png",
+			wantErr: false,
+		},
 	}
-	return b
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, _ := os.Open(tt.file)
+			defer file.Close()
+
+			card, err := managerCharAI.ReadPNGFromReader(file)
+			if err != nil {
+				if !tt.wantErr {
+					t.Errorf("ReadPNGFromReader() failed: %v", err)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("ReadPNGAsCard() succeeded unexpectedly")
+			}
+			if card == nil {
+				t.Fatal("ReadPNGAsCard() returned nil card")
+			}
+
+			// Validate card structure
+			t.Logf("Character Name: %s", card.Name)
+			t.Logf("Spec: %s v%s", card.Spec, card.SpecVersion)
+			t.Logf("Description (first 100 chars): %s", card.Description[:min(100, len(card.Description))])
+			t.Logf("Tags: %v", card.Tags)
+			t.Logf("Data.Name: %s", card.Data.Name)
+			t.Logf("Data.Creator: %s", card.Data.Creator)
+			t.Logf("Data.Tags: %v", card.Data.Tags)
+			t.Logf("Alternate Greetings: %d", len(card.Data.AlternateGreetings))
+
+			// Basic validation
+			if card.Name == "" && card.Data.Name == "" {
+				t.Error("Both Name and Data.Name are empty")
+			}
+			if card.Spec == "" {
+				t.Error("Spec is empty")
+			}
+			if card.SpecVersion == "" {
+				t.Error("SpecVersion is empty")
+			}
+		})
+
+	}
 }
 
 func TestReadPNGAsCard(t *testing.T) {
