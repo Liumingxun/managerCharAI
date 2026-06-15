@@ -93,7 +93,7 @@ func (c *CharacterCard) SavePNG(outputFile, imageBase64 string) error {
 	return WritePNGFromCard(outputFile, imageBase64, c)
 }
 
-// ReadPNGFromReader reads a CharacterCard from a bytes.Reader containing PNG data
+// ReadPNGFromReader reads a CharacterCard from a io.Reader containing PNG data
 func ReadPNGFromReader(r io.Reader) (*CharacterCard, error) {
 	base64, err := extractBase64FromReader(r)
 	if err != nil {
